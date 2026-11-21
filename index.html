@@ -133,7 +133,9 @@ const state = {
 try {
   const saved = JSON.parse(localStorage.getItem(KEY) || "{}");
   // ถ้าชุดก่อนหน้าส่งคำตอบไปแล้ว ให้เริ่มใหม่หมด เผื่อผู้ประเมินคนถัดไปใช้เครื่องเดียวกัน
-  if (!saved.sent) Object.assign(state, saved); else localStorage.removeItem(KEY);
+  // ล้างเฉพาะชุดที่ส่งสำเร็จแล้ว ถ้าส่งไม่สำเร็จต้องเก็บคำตอบไว้ให้ลองส่งใหม่
+  if (!(saved.sent && saved.sendOk !== false)) Object.assign(state, saved);
+  else localStorage.removeItem(KEY);
 } catch (e) {}
 function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
 
@@ -321,18 +323,32 @@ function doneScreen() {
       log.push({ at: new Date().toISOString(), name: p.name, years: p.years, device: p.device, answers: payload, comment: p.comment });
       localStorage.setItem("blindtest_log", JSON.stringify(log));
     } catch (e) {}
-    if (CFG.FORM_ACTION) {
-      const f = el("form", { action: CFG.FORM_ACTION, method: "POST", target: "gf_sink", class: "hidden" });
-      const put = (n, v) => f.appendChild(el("input", { type: "hidden", name: n, value: v }));
-      put(CFG.FIELDS.name, p.name); put(CFG.FIELDS.years, p.years);
-      put(CFG.FIELDS.device, p.device); put(CFG.FIELDS.answers, payload);
-      put(CFG.FIELDS.comment, p.comment);
-      document.body.appendChild(f); f.submit();
-      setTimeout(() => { state.sent = true; state.screen = "thanks"; save(); render(); }, 1200);
-    } else {
-      // ยังไม่ได้ตั้งค่า Google Form — ให้คัดลอกข้อความส่งกลับแทน
-      state.sent = true; state.screen = "thanks"; save(); render();
-    }
+    const finish = ok => { state.sent = true; state.sendOk = ok; state.screen = "thanks"; save(); render(); };
+
+    if (!CFG.FORM_ACTION) { finish(true); return; }   // โหมดคัดลอกส่งเอง
+
+    if (navigator.onLine === false) { finish(false); return; }
+
+    // ส่งผ่าน iframe ซ่อน แล้วรอเหตุการณ์ load เพื่อดูว่าส่งถึงปลายทางหรือไม่
+    const sink = document.querySelector('iframe[name="gf_sink"]');
+    let settled = false;
+    const done = ok => {
+      if (settled) return;
+      settled = true;
+      sink.removeEventListener("load", onLoad); clearTimeout(timer);
+      setTimeout(() => finish(ok), 400);
+    };
+    const onLoad = () => done(true);
+    sink.addEventListener("load", onLoad);
+    const timer = setTimeout(() => done(false), 12000);
+
+    const f = el("form", { action: CFG.FORM_ACTION, method: "POST", target: "gf_sink", class: "hidden" });
+    const put = (n, v) => f.appendChild(el("input", { type: "hidden", name: n, value: v }));
+    put(CFG.FIELDS.name, p.name); put(CFG.FIELDS.years, p.years);
+    put(CFG.FIELDS.device, p.device); put(CFG.FIELDS.answers, payload);
+    put(CFG.FIELDS.comment, p.comment);
+    document.body.appendChild(f);
+    try { f.submit(); } catch (e) { done(false); }
   });
 
   const manual = CFG.FORM_ACTION ? null : el("div", { class: "note" },
@@ -351,40 +367,54 @@ function doneScreen() {
 }
 
 /* ------------------------------ หน้าขอบคุณ ------------------------------ */
+function copyCard(lead) {
+  const ta = el("textarea", { readonly: "" });
+  ta.value = state.profile.name + " | " + state.profile.years + " | " + state.profile.device +
+    " | " + encode() + " | " + (state.profile.comment || "");
+  const copy = el("button", { class: "btn" }, "คัดลอกข้อความคำตอบ");
+  copy.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(ta.value); copy.textContent = "คัดลอกแล้ว"; }
+    catch (e) { ta.select(); copy.textContent = "กรุณากดค้างที่ข้อความแล้วเลือกคัดลอก"; }
+  });
+  return el("div", { class: "card" }, el("p", {}, lead), ta, copy);
+}
+
 function thanks() {
-  const payload = encode();
-  const box = [
-    el("div", { class: "card" },
-      el("h2", {}, "ส่งคำตอบเรียบร้อย ขอบคุณที่ช่วยงานวิจัยครับ"),
-      el("div", { class: "ok" }, "ความเห็นของท่านจะถูกนำไปใช้ประเมินคุณภาพของโปรแกรม และรายงานเป็นภาพรวมโดยไม่เปิดเผยชื่อ"))
-  ];
-  {
-    const ta = el("textarea", { readonly: "" });
-    ta.value = state.profile.name + " | " + state.profile.years + " | " + state.profile.device +
-      " | " + payload + " | " + (state.profile.comment || "");
-    const copy = el("button", { class: "btn" }, "คัดลอกข้อความคำตอบ");
-    copy.addEventListener("click", async () => {
-      try { await navigator.clipboard.writeText(ta.value); copy.textContent = "คัดลอกแล้ว"; }
-      catch (e) { ta.select(); copy.textContent = "กรุณากดค้างที่ข้อความแล้วเลือกคัดลอก"; }
+  // ส่งไม่สำเร็จ: บอกให้ชัด แล้วให้ทางออกสองทาง
+  if (CFG.FORM_ACTION && state.sendOk === false) {
+    const retry = el("button", { class: "btn" }, "ลองส่งอีกครั้ง");
+    retry.addEventListener("click", () => {
+      state.sent = false; state.sendOk = undefined; state.screen = "done"; save(); render();
     });
-    const body = el("div", { class: "card" },
-      el("p", {}, "กรุณาคัดลอกข้อความด้านล่าง แล้วส่งกลับให้ผู้วิจัยทางไลน์หรือช่องทางที่นัดหมายไว้"), ta, copy);
-    if (CFG.FORM_ACTION) {
-      // ส่งเข้าระบบไปแล้ว ซ่อนไว้ก่อน เผื่อกรณีส่งไม่สำเร็จจึงค่อยเปิด
-      body.classList.add("hidden");
-      const link = el("button", { class: "btn ghost" }, "ส่งไม่สำเร็จใช่ไหม กดที่นี่เพื่อคัดลอกคำตอบส่งเอง");
-      link.addEventListener("click", () => { body.classList.remove("hidden"); link.classList.add("hidden"); });
-      box.push(link);
-    }
-    box.push(body);
+    return [
+      el("div", { class: "card" },
+        el("h2", {}, "ยังส่งคำตอบไม่สำเร็จ"),
+        el("div", { class: "err" }, "ดูเหมือนอินเทอร์เน็ตจะขัดข้อง คำตอบของท่านยังอยู่ครบ ไม่ได้หายไปไหน"),
+        el("p", { class: "muted" }, "กรุณาตรวจสัญญาณอินเทอร์เน็ตแล้วกดลองส่งอีกครั้ง"),
+        retry),
+      copyCard("ถ้ายังส่งไม่ได้ กรุณาคัดลอกข้อความด้านล่างส่งกลับให้ผู้วิจัยทางไลน์หรือช่องทางที่นัดหมายไว้")
+    ];
   }
-  box.push(el("button", {
-    class: "btn ghost", onclick: () => {
-      if (!confirm("ล้างคำตอบเพื่อให้คนถัดไปทำต่อ ใช่หรือไม่")) return;
-      localStorage.removeItem(KEY); location.reload();
-    }
-  }, "ล้างคำตอบสำหรับผู้ประเมินคนถัดไป"));
-  return box;
+
+  // ส่งผ่าน Google Form สำเร็จ: จบตรงนี้ ไม่ต้องให้ผู้ประเมินเลือกอะไรอีก
+  if (CFG.FORM_ACTION) {
+    return [
+      el("div", { class: "card" },
+        el("h2", {}, "ส่งคำตอบเรียบร้อยแล้ว"),
+        el("div", { class: "ok" }, "ขอบคุณที่สละเวลาช่วยงานวิจัยครับ ความเห็นของท่านจะถูกนำไปใช้ประเมินคุณภาพของโปรแกรม และรายงานเป็นภาพรวมโดยไม่เปิดเผยชื่อ"),
+        el("p", { class: "muted" }, "ท่านปิดหน้านี้ได้เลย")),
+      el("p", { class: "muted", style: "text-align:center" },
+        "สำหรับผู้ดำเนินการเก็บข้อมูล: ถ้าจะให้ผู้ประเมินคนถัดไปใช้เครื่องนี้ต่อ ให้รีเฟรชหน้าเว็บหนึ่งครั้ง")
+    ];
+  }
+
+  // โหมดที่ยังไม่ได้ผูกกับ Google Form
+  return [
+    el("div", { class: "card" },
+      el("h2", {}, "ให้คะแนนครบแล้ว ขอบคุณมากครับ"),
+      el("div", { class: "ok" }, "เหลืออีกขั้นเดียว คือส่งข้อความคำตอบกลับให้ผู้วิจัย")),
+    copyCard("กรุณาคัดลอกข้อความด้านล่าง แล้วส่งกลับให้ผู้วิจัยทางไลน์หรือช่องทางที่นัดหมายไว้")
+  ];
 }
 
 /* -------------------------------- render -------------------------------- */
