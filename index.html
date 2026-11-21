@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ประเมินคุณภาพวิดีโอ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+/* ======================================================================
+   ตั้งค่าได้ที่ตัวแปร CFG ในสคริปต์ด้านล่าง (บรรทัดแรก ๆ ของ <script>)
+   ====================================================================== */
+:root{
+  --bg:#f6f7f9; --card:#fff; --ink:#1a1d21; --muted:#5b6672; --line:#dde2e8;
+  --accent:#1f6feb; --accent-ink:#fff; --ok:#1a7f4b; --warn:#9a6700;
+  --radius:14px; --pad:16px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:"Noto Sans Thai",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font-size:17px; line-height:1.65; -webkit-text-size-adjust:100%;
+}
+.wrap{max-width:620px; margin:0 auto; padding:16px}
+.card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:var(--pad); margin-bottom:14px}
+h1{font-size:1.4rem; margin:.2em 0 .4em; line-height:1.4}
+h2{font-size:1.15rem; margin:.1em 0 .5em}
+p{margin:.5em 0}
+.muted{color:var(--muted); font-size:.95rem}
+.btn{
+  display:block; width:100%; padding:15px 18px; border:0; border-radius:12px;
+  background:var(--accent); color:var(--accent-ink); font:inherit; font-weight:600;
+  cursor:pointer; margin-top:10px; -webkit-appearance:none;
+}
+.btn[disabled]{background:#b9c3cf; cursor:not-allowed}
+.btn.ghost{background:#eef1f5; color:var(--ink)}
+.row{display:flex; gap:10px}
+.row .btn{margin-top:0}
+label{display:block; font-weight:600; margin:14px 0 4px}
+input[type=text],input[type=number],textarea,select{
+  width:100%; padding:12px; border:1px solid var(--line); border-radius:10px;
+  font:inherit; background:#fff; color:var(--ink); -webkit-appearance:none;
+}
+textarea{min-height:90px}
+video{width:100%; border-radius:10px; background:#000; display:block}
+.clip{border:1px solid var(--line); border-radius:12px; padding:12px; margin:12px 0; background:#fbfcfd}
+.clip h3{margin:0 0 8px; font-size:1.05rem}
+.plays{font-size:.85rem; color:var(--muted); margin-top:6px}
+.plays.over{color:var(--warn); font-weight:600}
+.scale{display:flex; gap:6px; margin-top:6px}
+.scale button{
+  flex:1; padding:12px 0; border:1px solid var(--line); background:#fff; color:var(--ink);
+  border-radius:10px; font:inherit; font-weight:600; cursor:pointer; min-height:48px;
+}
+.scale button[aria-pressed=true]{background:var(--accent); color:#fff; border-color:var(--accent)}
+.scalehint{display:flex; justify-content:space-between; font-size:.8rem; color:var(--muted); margin-top:3px}
+.chips{display:flex; flex-wrap:wrap; gap:8px; margin-top:6px}
+.chips button{
+  padding:10px 14px; border:1px solid var(--line); background:#fff; color:var(--ink);
+  border-radius:999px; font:inherit; cursor:pointer; min-height:44px;
+}
+.chips button[aria-pressed=true]{background:var(--accent); color:#fff; border-color:var(--accent)}
+.bar{height:8px; background:#e6eaef; border-radius:99px; overflow:hidden; margin-bottom:10px}
+.bar>i{display:block; height:100%; background:var(--accent); width:0; transition:width .25s}
+.step{font-size:.9rem; color:var(--muted); margin-bottom:6px}
+.note{background:#fff8e6; border:1px solid #f0dca8; border-radius:10px; padding:10px 12px; font-size:.95rem}
+.err{background:#fdecec; border:1px solid #f2bcbc; border-radius:10px; padding:10px 12px; margin-top:10px}
+.ok{background:#e9f7ef; border:1px solid #b6e0c7; border-radius:10px; padding:10px 12px}
+ul{padding-left:1.2em; margin:.4em 0}
+li{margin:.25em 0}
+code{background:#eef1f5; padding:2px 6px; border-radius:6px; font-size:.9em; word-break:break-all}
+.hidden{display:none !important}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme=light]){
+    --bg:#15181c; --card:#1d2126; --ink:#e9edf2; --muted:#9aa5b1; --line:#2d343c;
+    --accent:#4c8dff; --accent-ink:#0c1016;
+  }
+  :root:not([data-theme=light]) input,:root:not([data-theme=light]) textarea,
+  :root:not([data-theme=light]) .scale button,:root:not([data-theme=light]) .chips button{background:#242931; color:#e9edf2}
+  :root:not([data-theme=light]) .clip{background:#20252b}
+  :root:not([data-theme=light]) .note{background:#2a2518; border-color:#4a3f20}
+  :root:not([data-theme=light]) .err{background:#2d1b1b; border-color:#5a2f2f}
+  :root:not([data-theme=light]) .ok{background:#17291f; border-color:#2c5138}
+  :root:not([data-theme=light]) code{background:#242931}
+}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<iframe name="gf_sink" class="hidden" title="sink"></iframe>
+
+<script>
+/* ============================ ตั้งค่า ============================ */
+const CFG = {
+  // ที่อยู่ของไฟล์วิดีโอ ลงท้ายด้วย /  (เช่น "clips/" หรือ "https://cpe.rbru.ac.th/blindtest/clips/")
+  VIDEO_BASE: "clips/",
+  PAIRS: 10,
+
+  // วางลิงก์ formResponse ของ Google Form ที่นี่ (ดูวิธีหาในคู่มือ)
+  // ตัวอย่าง: "https://docs.google.com/forms/d/e/1FAIpQLSxxxxxxxx/formResponse"
+  FORM_ACTION: "",
+
+  // รหัสช่องของ Google Form (entry.xxxxxxx) ให้ตรงกับคำถามแต่ละข้อ
+  FIELDS: {
+    name:    "entry.1111111111",   // ชื่อหรือรหัสผู้ประเมิน
+    years:   "entry.2222222222",   // ประสบการณ์ (ปี)
+    device:  "entry.3333333333",   // อุปกรณ์ที่ใช้เป็นหลัก
+    answers: "entry.4444444444",   // ข้อมูลคำตอบ (ย่อหน้ายาว) ** สำคัญที่สุด **
+    comment: "entry.5555555555"    // ข้อคิดเห็นเพิ่มเติม
+  }
+};
+/* ========================= จบส่วนตั้งค่า ========================= */
+
+const CRITS = [
+  ["s", "มุมภาพนิ่ง ไม่ซูมเข้า-ออกเอง"],
+  ["n", "ดูเป็นธรรมชาติ ไม่เหมือนถูกแต่ง"],
+  ["a", "ความสวยงามโดยรวม"]
+];
+const ARTIFACTS = ["ไม่พบ", "ขอบภาพหาย", "ภาพเบลอ", "ภาพสั่น"];
+const KEY = "blindtest_draft_v1";
+
+const state = {
+  screen: "intro",
+  idx: 0,
+  profile: { name: "", years: "", device: "", comment: "" },
+  ans: {},      // ans[pair] = {A:{s,n,a}, B:{s,n,a}, choice, art, playsA, playsB}
+  sent: false
+};
+try {
+  const saved = JSON.parse(localStorage.getItem(KEY) || "{}");
+  // ถ้าชุดก่อนหน้าส่งคำตอบไปแล้ว ให้เริ่มใหม่หมด เผื่อผู้ประเมินคนถัดไปใช้เครื่องเดียวกัน
+  if (!saved.sent) Object.assign(state, saved); else localStorage.removeItem(KEY);
+} catch (e) {}
+function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+
+const app = document.getElementById("app");
+const pad = n => String(n).padStart(2, "0");
+const el = (t, a = {}, ...kids) => {
+  const n = document.createElement(t);
+  for (const k in a) {
+    if (k === "class") n.className = a[k];
+    else if (k === "html") n.innerHTML = a[k];
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), a[k]);
+    else n.setAttribute(k, a[k]);
+  }
+  kids.flat().forEach(c => n.appendChild(typeof c === "string" ? document.createTextNode(c) : c));
+  return n;
+};
+
+/* ----------------------------- หน้าแรก ----------------------------- */
+function intro() {
+  const p = state.profile;
+  const name = el("input", { type: "text", id: "f_name", value: p.name, placeholder: "เช่น สมชาย หรือ ร้านสมชายสตูดิโอ" });
+  const years = el("input", { type: "number", id: "f_years", value: p.years, min: "0", max: "60", placeholder: "เช่น 3" });
+  const device = el("input", { type: "text", id: "f_device", value: p.device, placeholder: "เช่น มือถือ iPhone / กล้อง Canon" });
+  const err = el("div", { class: "err hidden" });
+
+  const go = () => {
+    p.name = name.value.trim(); p.years = years.value.trim(); p.device = device.value.trim();
+    if (!p.name) { err.textContent = "กรุณากรอกชื่อหรือรหัสผู้ประเมินก่อน"; err.classList.remove("hidden"); return; }
+    save(); state.screen = "pair"; state.idx = 0; render();
+  };
+
+  return [
+    el("div", { class: "card" },
+      el("h1", {}, "ช่วยให้คะแนนวิดีโอหน่อยครับ"),
+      el("p", {}, "งานวิจัยนี้พัฒนาโปรแกรมแก้อาการภาพ “ซูมเข้า-ออกเอง” ขณะหมุนโฟกัสของกล้องทั่วไป ท่านจะได้ดูวิดีโอ 10 คู่ คู่ละ 2 คลิป ซึ่งเป็นภาพฉากเดียวกัน แล้วให้คะแนนตามที่ท่านรู้สึก"),
+      el("p", { class: "muted" }, "ใช้เวลาประมาณ 15 ถึง 20 นาที ไม่มีคำตอบถูกหรือผิด และข้อมูลจะรายงานเป็นภาพรวมโดยไม่เปิดเผยชื่อ"),
+      el("div", { class: "note" },
+        el("b", {}, "ข้อสำคัญ "), "ผู้วิจัยจะไม่บอกว่าคลิปไหนผ่านการแก้ไข และขอให้ท่านไม่ต้องเดา ให้ดูแล้วให้คะแนนตามความรู้สึกจริงเท่านั้น")
+    ),
+    el("div", { class: "card" },
+      el("h2", {}, "ข้อมูลผู้ประเมิน"),
+      el("label", { for: "f_name" }, "ชื่อหรือรหัสผู้ประเมิน"), name,
+      el("label", { for: "f_years" }, "ถ่ายวิดีโอมากี่ปีแล้ว"), years,
+      el("label", { for: "f_device" }, "ใช้อุปกรณ์อะไรเป็นหลัก"), device,
+      err,
+      el("button", { class: "btn", onclick: go }, "เริ่มให้คะแนน")
+    ),
+    el("p", { class: "muted", style: "text-align:center" }, "การกดเริ่มถือว่าท่านยินยอมเข้าร่วมด้วยความสมัครใจ และถอนตัวได้ตลอดเวลา")
+  ];
+}
+
+/* ---------------------------- หน้าให้คะแนน ---------------------------- */
+function clipBox(pairNo, slot) {
+  const a = state.ans[pairNo];
+  const letter = slot === "A" ? "ก" : "ข";
+  const src = CFG.VIDEO_BASE + "pair" + pad(pairNo) + "_v" + (slot === "A" ? 1 : 2) + ".mp4";
+  const plays = el("div", { class: "plays" });
+  const vid = el("video", { controls: "", preload: "metadata", playsinline: "", src: src });
+  const pk = "plays" + slot;
+  const upd = () => {
+    const n = a[pk] || 0;
+    plays.textContent = "เปิดดูแล้ว " + n + " ครั้ง" + (n > 3 ? " (แนะนำไม่เกิน 3 ครั้ง)" : "");
+    plays.classList.toggle("over", n > 3);
+  };
+  vid.addEventListener("play", () => { a[pk] = (a[pk] || 0) + 1; save(); upd(); });
+  upd();
+
+  const box = el("div", { class: "clip" }, el("h3", {}, "คลิป " + letter), vid, plays);
+
+  CRITS.forEach(([k, label]) => {
+    box.appendChild(el("label", {}, label));
+    const row = el("div", { class: "scale" });
+    for (let v = 1; v <= 5; v++) {
+      const b = el("button", { type: "button", "aria-pressed": String(a[slot][k] === v) }, String(v));
+      b.addEventListener("click", () => {
+        a[slot][k] = v; save();
+        [...row.children].forEach((c, i) => c.setAttribute("aria-pressed", String(i + 1 === v)));
+        refreshNext();
+      });
+      row.appendChild(b);
+    }
+    box.appendChild(row);
+    box.appendChild(el("div", { class: "scalehint" }, el("span", {}, "1 = น้อยที่สุด"), el("span", {}, "5 = มากที่สุด")));
+  });
+  return box;
+}
+
+let refreshNext = () => {};
+
+function pairScreen() {
+  const no = state.idx + 1;
+  if (!state.ans[no]) state.ans[no] = { A: {}, B: {}, choice: "", art: "", playsA: 0, playsB: 0 };
+  const a = state.ans[no];
+
+  const bar = el("div", { class: "bar" }, el("i", { style: "width:" + (state.idx / CFG.PAIRS * 100) + "%" }));
+  const head = el("div", { class: "card" },
+    bar,
+    el("div", { class: "step" }, "คู่ที่ " + no + " จาก " + CFG.PAIRS),
+    el("h2", {}, "ดูคลิป ก และ คลิป ข แล้วให้คะแนน"),
+    el("p", { class: "muted" }, "ทั้งสองคลิปเป็นภาพฉากเดียวกัน ขอให้ดูให้จบทั้งสองคลิปก่อนให้คะแนน"));
+
+  const body = el("div", { class: "card" }, clipBox(no, "A"), clipBox(no, "B"));
+
+  // เลือกคลิปที่ดูดีกว่า
+  const choiceBox = el("div", { class: "card" }, el("label", {}, "โดยรวมแล้ว คลิปไหนดูดีกว่า"));
+  const chips = el("div", { class: "chips" });
+  [["A", "คลิป ก"], ["B", "คลิป ข"], ["tie", "พอ ๆ กัน"]].forEach(([v, t]) => {
+    const b = el("button", { type: "button", "aria-pressed": String(a.choice === v) }, t);
+    b.addEventListener("click", () => {
+      a.choice = v; save();
+      [...chips.children].forEach(c => c.setAttribute("aria-pressed", String(c.textContent === t)));
+      refreshNext();
+    });
+    chips.appendChild(b);
+  });
+  choiceBox.appendChild(chips);
+
+  choiceBox.appendChild(el("label", {}, "สังเกตเห็นสิ่งผิดปกติหรือไม่"));
+  const achips = el("div", { class: "chips" });
+  ARTIFACTS.forEach(t => {
+    const b = el("button", { type: "button", "aria-pressed": String(a.art === t) }, t);
+    b.addEventListener("click", () => {
+      a.art = t; save();
+      [...achips.children].forEach(c => c.setAttribute("aria-pressed", String(c.textContent === t)));
+      refreshNext();
+    });
+    achips.appendChild(b);
+  });
+  choiceBox.appendChild(achips);
+
+  const warn = el("div", { class: "err hidden" }, "กรุณาให้คะแนนให้ครบทุกข้อก่อนไปคู่ถัดไป");
+  const next = el("button", { class: "btn" }, state.idx + 1 < CFG.PAIRS ? "คู่ถัดไป" : "ไปหน้าสรุปและส่งคำตอบ");
+  const back = el("button", { class: "btn ghost" }, "ย้อนกลับ");
+
+  const complete = () => CRITS.every(([k]) => a.A[k] && a.B[k]) && a.choice && a.art;
+  refreshNext = () => { next.disabled = !complete(); if (complete()) warn.classList.add("hidden"); };
+  refreshNext();
+
+  next.addEventListener("click", () => {
+    if (!complete()) { warn.classList.remove("hidden"); return; }
+    if (state.idx + 1 < CFG.PAIRS) { state.idx++; state.screen = "pair"; }
+    else state.screen = "done";
+    save(); render();
+  });
+  back.addEventListener("click", () => {
+    if (state.idx === 0) state.screen = "intro"; else state.idx--;
+    save(); render();
+  });
+
+  const nav = el("div", { class: "card" }, warn, next, back);
+  return [head, body, choiceBox, nav];
+}
+
+/* ------------------------- เข้ารหัสคำตอบเป็นข้อความ ------------------------- */
+function encode() {
+  const out = [];
+  for (let i = 1; i <= CFG.PAIRS; i++) {
+    const a = state.ans[i]; if (!a) continue;
+    out.push([pad(i),
+      CRITS.map(([k]) => a.A[k] || "").join(","),
+      CRITS.map(([k]) => a.B[k] || "").join(","),
+      a.choice, a.art, (a.playsA || 0) + "/" + (a.playsB || 0)].join("|"));
+  }
+  return out.join(" ; ");
+}
+
+/* ----------------------------- หน้าส่งคำตอบ ----------------------------- */
+function doneScreen() {
+  const p = state.profile;
+  const comment = el("textarea", { placeholder: "เช่น สังเกตเห็นความต่างตรงไหน หรือคิดว่าจะเอาไปใช้กับงานของท่านได้ไหม" });
+  comment.value = p.comment || "";
+  const payload = encode();
+  const msg = el("div", {});
+
+  const sendBtn = el("button", { class: "btn" }, "ส่งคำตอบ");
+  sendBtn.addEventListener("click", () => {
+    p.comment = comment.value.trim(); save();
+    sendBtn.disabled = true; sendBtn.textContent = "กำลังส่ง...";
+    if (CFG.FORM_ACTION) {
+      const f = el("form", { action: CFG.FORM_ACTION, method: "POST", target: "gf_sink", class: "hidden" });
+      const put = (n, v) => f.appendChild(el("input", { type: "hidden", name: n, value: v }));
+      put(CFG.FIELDS.name, p.name); put(CFG.FIELDS.years, p.years);
+      put(CFG.FIELDS.device, p.device); put(CFG.FIELDS.answers, payload);
+      put(CFG.FIELDS.comment, p.comment);
+      document.body.appendChild(f); f.submit();
+      setTimeout(() => { state.sent = true; state.screen = "thanks"; save(); render(); }, 1200);
+    } else {
+      // ยังไม่ได้ตั้งค่า Google Form — ให้คัดลอกข้อความส่งกลับแทน
+      state.sent = true; state.screen = "thanks"; save(); render();
+    }
+  });
+
+  const manual = CFG.FORM_ACTION ? null : el("div", { class: "note" },
+    el("b", {}, "หมายเหตุสำหรับผู้วิจัย "),
+    "ยังไม่ได้ตั้งค่าลิงก์ Google Form ในไฟล์นี้ ระบบจะแสดงข้อความคำตอบให้คัดลอกส่งกลับแทน");
+
+  return [
+    el("div", { class: "card" },
+      el("h2", {}, "ให้คะแนนครบแล้ว ขอบคุณมากครับ"),
+      el("p", {}, "ก่อนส่ง ขอความเห็นเพิ่มเติมสักเล็กน้อย (ไม่บังคับ)"),
+      el("label", {}, "ข้อคิดเห็นเพิ่มเติม"), comment,
+      manual || "", sendBtn,
+      el("button", { class: "btn ghost", onclick: () => { state.screen = "pair"; state.idx = CFG.PAIRS - 1; render(); } }, "ย้อนกลับไปแก้คำตอบ"),
+      msg)
+  ];
+}
+
+/* ------------------------------ หน้าขอบคุณ ------------------------------ */
+function thanks() {
+  const payload = encode();
+  const box = [
+    el("div", { class: "card" },
+      el("h2", {}, "ส่งคำตอบเรียบร้อย ขอบคุณที่ช่วยงานวิจัยครับ"),
+      el("div", { class: "ok" }, "ความเห็นของท่านจะถูกนำไปใช้ประเมินคุณภาพของโปรแกรม และรายงานเป็นภาพรวมโดยไม่เปิดเผยชื่อ"))
+  ];
+  if (!CFG.FORM_ACTION) {
+    const ta = el("textarea", { readonly: "" });
+    ta.value = state.profile.name + " | " + state.profile.years + " | " + state.profile.device +
+      " | " + payload + " | " + (state.profile.comment || "");
+    const copy = el("button", { class: "btn" }, "คัดลอกข้อความคำตอบ");
+    copy.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(ta.value); copy.textContent = "คัดลอกแล้ว"; }
+      catch (e) { ta.select(); copy.textContent = "กรุณากดค้างที่ข้อความแล้วเลือกคัดลอก"; }
+    });
+    box.push(el("div", { class: "card" },
+      el("p", {}, "กรุณาคัดลอกข้อความด้านล่าง แล้วส่งกลับให้ผู้วิจัยทางไลน์หรือช่องทางที่นัดหมายไว้"), ta, copy));
+  }
+  box.push(el("button", {
+    class: "btn ghost", onclick: () => {
+      if (!confirm("ล้างคำตอบเพื่อให้คนถัดไปทำต่อ ใช่หรือไม่")) return;
+      localStorage.removeItem(KEY); location.reload();
+    }
+  }, "ล้างคำตอบสำหรับผู้ประเมินคนถัดไป"));
+  return box;
+}
+
+/* -------------------------------- render -------------------------------- */
+function render() {
+  app.innerHTML = "";
+  const parts = state.screen === "intro" ? intro()
+    : state.screen === "pair" ? pairScreen()
+      : state.screen === "done" ? doneScreen() : thanks();
+  parts.flat().forEach(n => { if (n) app.appendChild(typeof n === "string" ? document.createTextNode(n) : n); });
+  window.scrollTo(0, 0);
+}
+render();
+</script>
+</body>
+</html>
