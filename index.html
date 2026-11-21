@@ -112,10 +112,11 @@ const CFG = {
 };
 /* ========================= จบส่วนตั้งค่า ========================= */
 
+// [รหัส, คำถาม, ป้ายปลายซ้าย (1), ป้ายปลายขวา (5)]
 const CRITS = [
-  ["s", "มุมภาพนิ่ง ไม่ซูมเข้า-ออกเอง"],
-  ["n", "ดูเป็นธรรมชาติ ไม่เหมือนถูกแต่ง"],
-  ["a", "ความสวยงามโดยรวม"]
+  ["s", "ขณะเปลี่ยนโฟกัส เห็นภาพขยาย-หดเองชัดแค่ไหน", "ไม่เห็นเลย", "เห็นชัดมาก"],
+  ["n", "ดูคลิปนี้แล้วสบายตาแค่ไหน", "ไม่สบายตาเลย", "สบายตามาก"],
+  ["a", "ให้คะแนนความสวยงามโดยรวมเท่าไหร่", "น้อยที่สุด", "มากที่สุด"]
 ];
 const ARTIFACTS = ["ไม่พบ", "ขอบภาพหาย", "ภาพเบลอ", "ภาพสั่น"];
 const KEY = "blindtest_draft_v1";
@@ -200,7 +201,7 @@ function clipBox(pairNo, slot) {
 
   const box = el("div", { class: "clip" }, el("h3", {}, "คลิป " + letter), vid, plays);
 
-  CRITS.forEach(([k, label]) => {
+  CRITS.forEach(([k, label, lo, hi]) => {
     box.appendChild(el("label", {}, label));
     const row = el("div", { class: "scale" });
     for (let v = 1; v <= 5; v++) {
@@ -213,7 +214,8 @@ function clipBox(pairNo, slot) {
       row.appendChild(b);
     }
     box.appendChild(row);
-    box.appendChild(el("div", { class: "scalehint" }, el("span", {}, "1 = น้อยที่สุด"), el("span", {}, "5 = มากที่สุด")));
+    box.appendChild(el("div", { class: "scalehint" },
+      el("span", {}, "1 = " + lo), el("span", {}, "5 = " + hi)));
   });
   return box;
 }
